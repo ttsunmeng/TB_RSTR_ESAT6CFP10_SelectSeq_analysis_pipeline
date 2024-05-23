@@ -12,9 +12,8 @@ library(Seurat)
 library(ggridges)
 
 #https://www.bioconductor.org/packages/release/bioc/html/CATALYST.html
-setwd("/Volumes/GoogleDrive/My\ Drive/Stanford/RNA-seq/data_analysis/TB_resistance/")
 
-ESAT6Table_cleaned <- read.csv('ESAT6Table_cleaned.csv',check.names = F)
+ESAT6Table_cleaned <- read.csv('TB_RSTR_PP1_index_sort_PCR_TCR_table.csv',check.names = F)
 flow_channels_full <- colnames(ESAT6Table_cleaned)[grepl('idx',colnames(ESAT6Table_cleaned))]
 ESAT6Table_cleaned <- ESAT6Table_cleaned[!is.na(ESAT6Table_cleaned[,flow_channels_full[1]]),]
 ESAT6Table_cleaned$donorGrp[ESAT6Table_cleaned$donorGrp == 'LTB'] <- 'LTBI'
@@ -47,6 +46,7 @@ CDR3b_unique_table_WithinDonor_All <- data.frame(Group_DonorID = numeric(0), sti
 
 CDR3a_clone_index <- 1
 CrossDonor_CDR3b_clone_number <- 1
+DonorID_list <- unique(ESAT6Table_cleaned$Group_DonorID)
 
 for (donorID in DonorID_list){
   print(donorID)
@@ -106,7 +106,8 @@ ESAT6Table_cleaned$if_cloned <- 0
 ESAT6Table_cleaned$if_cloned[(ESAT6Table_cleaned$CDR3a_clone_number_WithinDonor > 1) | (ESAT6Table_cleaned$CDR3b_clone_number_WithinDonor > 1)] <- 1
 
 ############ quantify cloanl expansion proportion #######################
-ESAT6Table_cleaned <- ESAT6Table[,c('donorId','if_CD4','if_cloned','stim','donorGrp','CDR3a','CDR3a_clone_group','CDR3a_clone_number_WithinDonor','CDR3a_clone_number_CrossDonor','CDR3b','CDR3b_clone_group','CDR3b_clone_number_WithinDonor','CDR3b_clone_number_CrossDonor')]#'Va','Ja','Vb','Jb',
+ESAT6Table_cleaned$if_CD4 <- ESAT6Table_cleaned$`idx_CD8_UV515-A`<1000
+ESAT6Table_cleaned <- ESAT6Table_cleaned[,c('donorId','if_CD4','if_cloned','stim','donorGrp','CDR3a','CDR3a_clone_group','CDR3a_clone_number_WithinDonor','CDR3a_clone_number_CrossDonor','CDR3b','CDR3b_clone_group','CDR3b_clone_number_WithinDonor','CDR3b_clone_number_CrossDonor')]#'Va','Ja','Vb','Jb',
 
 sum((ESAT6Table_cleaned$CDR3b_clone_number_WithinDonor > 1) | (ESAT6Table_cleaned$CDR3a_clone_number_WithinDonor > 1))
 sum((ESAT6Table_cleaned$CDR3b_clone_number_WithinDonor > 1))
@@ -149,13 +150,13 @@ ESAT6Table_cleaned$TCRb_if_cloned[ESAT6Table_cleaned$CDR3b_clone_number_WithinDo
 ESAT6Table_cleaned$TCRb_if_cloned[ESAT6Table_cleaned$CDR3b_clone_number_WithinDonor == 0] <- -1
 
 RSTR_CD4_CD8_count <- dplyr::count(ESAT6Table_cleaned,stim,donorGrp,donorId,if_CD4,TCRb_if_cloned)
-RSTR_CD4_CD8_count <- RSTR_CD4_CD8_count %>% group_by(stim, donorGrp, donorId,if_CD4) %>% mutate(total = sum(n))
+RSTR_CD4_CD8_count <- RSTR_CD4_CD8_count %>% dplyr::group_by(stim, donorGrp, donorId,if_CD4) %>% dplyr::mutate(total = sum(n))
 RSTR_CD4_CD8_count$percentage <- RSTR_CD4_CD8_count$n/RSTR_CD4_CD8_count$total*100
 # Filling zero values for the condition that has no counts!!
 for (donor_name in unique(RSTR_CD4_CD8_count$donorId)){
   # print(donor_name)
   temp_Tcount <- RSTR_CD4_CD8_count[(RSTR_CD4_CD8_count$donorId == donor_name),][1,]
-  for (cluster_name in c('CD4','CD8')){
+  for (cluster_name in c(1,0)){
     for (temp_clone in c(-1,0,1)){
       if_row <- ((RSTR_CD4_CD8_count$donorId == donor_name) & (RSTR_CD4_CD8_count$if_CD4 == cluster_name) & (RSTR_CD4_CD8_count$TCRb_if_cloned == temp_clone))
       if (sum(if_row) == 0){
@@ -173,11 +174,11 @@ cols_group <- c('#984EA3','#4DAF4A')
 names(cols_group) <- c('RSTR','LTBI')
 
 print(cluster_name)
-temp_cell_cluster <- RSTR_CD4_CD8_count[(RSTR_CD4_CD8_count$if_CD4 == 'CD4') & (RSTR_CD4_CD8_count$TCRb_if_cloned == 1) & (RSTR_CD4_CD8_count$stim == 'PP1'),]
-ttest_result1 <- wilcox.test(temp_cell_cluster$percentage[(temp_cell_cluster$stim_group =='PP1 LTBI')],
-                             temp_cell_cluster$percentage[(temp_cell_cluster$stim_group =='PP1 RSTR')])
+temp_cell_cluster <- RSTR_CD4_CD8_count[(RSTR_CD4_CD8_count$if_CD4 == 1) & (RSTR_CD4_CD8_count$TCRb_if_cloned == 1) & (RSTR_CD4_CD8_count$stim == 'ESAT-6/CFP-10 6 hrs'),]
+ttest_result1 <- wilcox.test(temp_cell_cluster$percentage[(temp_cell_cluster$donorGrp =='LTBI')],
+                             temp_cell_cluster$percentage[(temp_cell_cluster$donorGrp =='RSTR')])
 temp_cell_cluster$donorGrp <- factor(temp_cell_cluster$donorGrp,levels = c('RSTR','LTBI'))
-ggplot(temp_cell_cluster,aes(x=donorGrp, y=percentage,color = donorGrp,group = stim_group)) +  ggtitle(cluster_name) +
+ggplot(temp_cell_cluster,aes(x=donorGrp, y=percentage,color = donorGrp,group = donorGrp)) +  ggtitle(cluster_name) +
   geom_boxplot() +
   geom_jitter(size=1,shape = 9) +
   theme(text = element_text(size = 10),plot.title = element_text(size = 10, face = "bold")) + RotatedAxis() +
@@ -190,6 +191,13 @@ ggplot(temp_cell_cluster,aes(x=donorGrp, y=percentage,color = donorGrp,group = s
 dev.print(pdf, paste('TB_RSTR_PP1_CD4_TCRb_clone_ratio.pdf',sep = ''),width = 3, height = 3)
 
 ######## csv outputing #####################
+ESAT6Table_cleaned <- read.csv('TB_RSTR_PP1_index_sort_PCR_TCR_table.csv',check.names = F)
+flow_channels_full <- colnames(ESAT6Table_cleaned)[grepl('idx',colnames(ESAT6Table_cleaned))]
+ESAT6Table_cleaned <- ESAT6Table_cleaned[!is.na(ESAT6Table_cleaned[,flow_channels_full[1]]),]
+ESAT6Table_cleaned$donorGrp[ESAT6Table_cleaned$donorGrp == 'LTB'] <- 'LTBI'
+ESAT6Table_cleaned$`age at study baseline` <- str_pad(ESAT6Table_cleaned$`age at study baseline`, 2, pad = "0")
+ESAT6Table_cleaned$donorGrp_AgeBase_Sex_donorID <- paste(ESAT6Table_cleaned$donorGrp,' ',ESAT6Table_cleaned$`age at study baseline`,'yrs ',ESAT6Table_cleaned$SEX,' ',ESAT6Table_cleaned$donorId,sep = '')
+
 ESAT6_flow_dataframe <- ESAT6Table_cleaned[,flow_channels_full[1:(length(flow_channels_full) - 1)]]
 flow_panel_name_full <- colnames(ESAT6_flow_dataframe)
 flow_panel_name_short <- gsub('_.*','',substring(flow_panel_name_full,first = 5,last = 30))

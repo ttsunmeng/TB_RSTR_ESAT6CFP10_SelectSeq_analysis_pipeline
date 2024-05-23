@@ -24,8 +24,7 @@ library(reshape2)
 
 setwd("/Volumes/GoogleDrive/My Drive/Stanford/RNA-seq/data_analysis/TB_RSTR/")
 ############# data inputting #############################################
-write.table(t(as.matrix(TB_shrink.seurat@assays[["RNA"]]@counts)), file='TB_RSTR_PP1_CD4_raw.tsv', quote=FALSE, sep='\t', col.names = NA)
-saveRDS(TB_shrink.seurat,'TB_RSTR_PP1_CD4_lognorm.rds')
+TB_shrink.seurat <- readRDS('TB_RSTR_PP1_CD4_lognorm.rds')
 TB_shrink.seurat <- NormalizeData(TB_shrink.seurat, normalization.method = "LogNormalize", scale.factor = 3e6)
 TB_shrink.seurat <- ScaleData(TB_shrink.seurat)
 TB_shrink.seurat <- RunPCA(TB_shrink.seurat, features = seurat_gene_list, npcs = 50)
@@ -100,7 +99,7 @@ dev.print(pdf, 'TB_RSTR_PP1_CD4_lognorm_cleaned_DE_RSTR_vs_LTBI.pdf',width = 5.5
 ##### DE GO DAVID visualization #######
 # run DEG GO in DAVID website
 # https://david.ncifcrf.gov/tools.jsp
-table1 <- 'TB_RSTR_PP1_CD4_lognorm_RSTR_BP_DIRECT.xlsx'
+table1 <- 'TB_resistance_ESAT6_CD4_lognorm_RSTR_BP_DIRECT.xlsx'
 table1_DE_data <- read_excel(table1, sheet = "Sheet1")
 RSTR_signficant_genes <- RSTR_signficant_gene_table[!is.na(RSTR_signficant_gene_table$geneID),][,c('gene','geneID')]
 RSTR_signficant_genes$geneID <- as.numeric(RSTR_signficant_genes$geneID)
@@ -112,8 +111,8 @@ table1_DE_data <- table1_DE_data %>% dplyr::filter(FDR <= 0.05)
 BP_direct_select <- c('translation','mitochondrial electron transport, NADH to ubiquinone',
                         'cell-cell adhesion','movement of cell or subcellular component','Wnt signaling pathway, planar cell polarity pathway')
 
-BP_direct_select <- c('NIK/NF-kappaB signaling','T cell receptor signaling pathway','MAPK cascade',
-'tumor necrosis factor-mediated signaling pathway')
+# BP_direct_select <- c('NIK/NF-kappaB signaling','T cell receptor signaling pathway','MAPK cascade',
+# 'tumor necrosis factor-mediated signaling pathway')
 table1_DE_data <- table1_DE_data[table1_DE_data$Term %in% BP_direct_select,]
 table1_DE_data %>%
   mutate(Term = fct_reorder(Term, Count)) %>%
@@ -124,15 +123,15 @@ table1_DE_data %>%
   ggtitle('T cell activation') +
   xlab(expression(paste('GO BP terms of RSTR',symbol('\255')))) + ylab('#genes') + 
   theme_bw() +
-  scale_fill_gradientn(colors = c('yellow','#984EA3'),limits = c(0,0.0063)) +
+  scale_fill_gradientn(colors = c('khaki','#984EA3'),limits = c(0,0.0063)) +
   scale_x_discrete(labels = wrap_format(35)) +
   theme(panel.grid = element_blank(), 
               axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1,size = 10),
               plot.title = element_text(size = 12, face = "bold"))
-dev.print(pdf, paste('TB_RSTR_PP1_CD4_lognorm_cleaned_DE_RSTR_DAVID_GO_BF_DIRECT_activation.pdf',sep = ''),width = 4.5, height = 2.5)
+dev.print(pdf, paste('TB_RSTR_PP1_CD4_lognorm_cleaned_DE_RSTR_DAVID_GO_BF_DIRECT_differentiation.pdf',sep = ''),width = 4.5, height = 2.5)
 
 # LTBI GO
-table1 <- './TB_RSTR_PP1_only_CD4_stringent_cutoff_lognorm_Seurat/DAVID_GO/TB_RSTR_PP1_CD4_stringent_lognorm_RSTR_vs_LTBI_downregulated_sig_DAVID_BP_DIRECT.xlsx'
+table1 <- 'TB_RSTR_PP1_CD4_stringent_lognorm_RSTR_vs_LTBI_downregulated_sig_DAVID_BP_DIRECT.xlsx'
 table1_DE_data <- read_excel(table1, sheet = "Sheet1")
 RSTR_signficant_genes <- RSTR_signficant_gene_table[!is.na(RSTR_signficant_gene_table$geneID),][,c('gene','geneID')]
 RSTR_signficant_genes$geneID <- as.numeric(RSTR_signficant_genes$geneID)
@@ -154,7 +153,7 @@ table1_DE_data %>%
   # ggtitle('metabolic and basic activities') +
   xlab(expression(paste('GO BP terms of LTBI',symbol('\255')))) + ylab('#genes') + 
   theme_bw() +
-  scale_fill_gradientn(colors = c('yellow','#984EA3'),limits = c(0,0.05)) +
+  scale_fill_gradientn(colors = c('khaki','#984EA3'),limits = c(0,0.05)) +
   scale_x_discrete(labels = wrap_format(35)) +
   theme(panel.grid = element_blank(), 
         axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1,size = 10),
@@ -434,7 +433,7 @@ dev.print(pdf, paste('TB_RSTR_PP1_CD4_violin_Flynn_NHM_T1T17pop1_score.pdf',sep 
 # install.packages('STRINGdb_2.6.1.tar.gz', repos = NULL, type="source")
 
 library(STRINGdb)
-immune_reference_table <- read_excel('../GO_terms/GO0002376_immune_system_process.xlsx', sheet = "Sheet1",col_names = F)
+immune_reference_table <- read_excel('GO0002376_immune_system_process.xlsx', sheet = "Sheet1",col_names = F)
 GO0002376_immune_system_process <- toupper(unique(immune_reference_table$...1))
 CD4_RSTR_LTBI.markers_immune <- CD4_RSTR_LTBI.markers[toupper(CD4_RSTR_LTBI.markers$gene) %in% GO0002376_immune_system_process,]
 
