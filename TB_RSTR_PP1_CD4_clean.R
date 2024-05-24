@@ -22,9 +22,8 @@ library("org.Hs.eg.db")
 hs <- org.Hs.eg.db
 library(reshape2)
 
-setwd("/Volumes/GoogleDrive/My Drive/Stanford/RNA-seq/data_analysis/TB_RSTR/")
 ############# data inputting #############################################
-TB_shrink.seurat <- readRDS('TB_RSTR_PP1_CD4_lognorm.rds')
+TB_shrink.seurat <- readRDS('TB_RSTR_PP1_CD4_Seurat_object.rds')
 TB_shrink.seurat <- NormalizeData(TB_shrink.seurat, normalization.method = "LogNormalize", scale.factor = 3e6)
 TB_shrink.seurat <- ScaleData(TB_shrink.seurat)
 TB_shrink.seurat <- RunPCA(TB_shrink.seurat, features = seurat_gene_list, npcs = 50)
