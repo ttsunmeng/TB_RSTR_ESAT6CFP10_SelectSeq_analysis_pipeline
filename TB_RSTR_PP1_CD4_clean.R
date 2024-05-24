@@ -1,6 +1,3 @@
-# # install.packages('remotes')
-# remotes::install_version("Seurat", version = "3.2.3")
-# library(Seurat)
 library(Seurat)
 library(dplyr)
 library(ggplot2)
@@ -23,15 +20,64 @@ hs <- org.Hs.eg.db
 library(reshape2)
 
 ############# data inputting #############################################
-TB_shrink.seurat <- readRDS('TB_RSTR_PP1_CD4_Seurat_object.rds')
+TB_table <- data.frame(read.table("TB_RSTR_PP1_CD4_raw.tsv",sep = "\t",header = TRUE, row.names = 1, quote = "#",check.names = FALSE))
+TB_shrink.seurat_all <- CreateSeuratObject(counts = TB_table, project = "TB_RSTR_PP1")
+TB_shrink.seurat_all$CP_Well <- colnames(TB_shrink.seurat_all)
+
+cpAnnotation <- read_excel("20200212_SI34_b1_to_b7_Subset_T_cloneVSsingleton_wCP.xlsx", sheet = "20200212_SI34_b1_to_b7_Subset_T")
+cpAnnotation$`CherryPick well` <- paste(substring(cpAnnotation$`CherryPick well`,first = 1, last = 1),as.character(formatC(as.numeric(substring(cpAnnotation$`CherryPick well`,first = 2, last = 3)), width = 2, format = "d", flag = 0)),sep = '')
+cpAnnotation$CP_Well <- paste('CP',cpAnnotation$`CherryPick plate`,'_',cpAnnotation$`CherryPick well`,sep = '')
+cpAnnotation <- cpAnnotation %>% arrange(`CherryPick plate`,`CherryPick well`)
+rownames(cpAnnotation) <- cpAnnotation$CP_Well
+
+p <- match(TB_shrink.seurat_all$CP_Well,cpAnnotation$CP_Well)
+cpAnnotation <- cpAnnotation[p,]
+
+PCR_marker <- c("FOXP3","GATA3", "GZMB","IFNG","IL13","IL17A","IL2","IL21","IL4","IL5","PERF","RORC","RUNX1","RUNX3","TBET","TGFB","TNF")
+flow_marker <- c("CD45RA","CD154","CD25","TCRab","CXCR3","HLADR","CD137", "CCR6","CD14CD19","CD4","CD38","CD3","CD69","CD8","CD127")#"CD16","FSC","SSC",
+
+cpAnnotation[,c(flow_marker)] <- mutate_all(cpAnnotation[,c(flow_marker)], function(x) as.numeric(x))
+for (feature in c(flow_marker)){
+  TB_shrink.seurat_all@meta.data[[paste('flow',feature,sep = '_')]] <- cpAnnotation[[feature]]
+}
+for (feature in c(PCR_marker)){
+  TB_shrink.seurat_all@meta.data[[paste('PCR',feature,sep = '_')]] <- cpAnnotation[[feature]]
+}
+
+TB_shrink.seurat_all$batch <- cpAnnotation$`CherryPick plate`
+TB_shrink.seurat_all$Group <- 'RSTR'
+TB_shrink.seurat_all$Group[cpAnnotation$donorGrp == "TST+ control"] <- 'LTBI'
+TB_shrink.seurat_all$DonorID <- cpAnnotation$donorId
+
+TB_shrink.seurat <- subset(TB_shrink.seurat_all,nFeature_RNA < 4000)
+TB_shrink.seurat[["percent.mt"]] <- PercentageFeatureSet(TB_shrink.seurat, pattern = "^MT-")
+
+TB_shrink.seurat <- subset(TB_shrink.seurat,percent.mt < 5)
+TB_shrink.seurat <- subset(TB_shrink.seurat,nCount_RNA > 5e5)
+TB_shrink.seurat <- subset(TB_shrink.seurat, flow_CD8 < 1000)
+
 TB_shrink.seurat <- NormalizeData(TB_shrink.seurat, normalization.method = "LogNormalize", scale.factor = 3e6)
 TB_shrink.seurat <- ScaleData(TB_shrink.seurat)
+seurat_gene_list <- rownames(TB_shrink.seurat)
 TB_shrink.seurat <- RunPCA(TB_shrink.seurat, features = seurat_gene_list, npcs = 50)
 n_pca_selected <- 30
 TB_shrink.seurat <- RunUMAP(TB_shrink.seurat, reduction = "pca", dims = 1:n_pca_selected)
 
+# read in the seurat object to keep consistent UMAP
+TB_shrink.seurat <- readRDS('TB_RSTR_PP1_CD4_Seurat_object.rds')
+TB_shrink.seurat$Donor <- TB_shrink.seurat$DonorID
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '92527-1-02'] <- '1'
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '93506-1-02'] <- '2'
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '93774-1-05'] <- '3'
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '84165-1-06'] <- '4'
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '91512-1-05'] <- '5'
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '92422-1-03'] <- '6'
+TB_shrink.seurat$Donor[TB_shrink.seurat$DonorID == '93334-1-02'] <- '7'
+
 cols_clusters <- c('#984EA3','#4DAF4A')
 names(cols_clusters) <- c('1','0')
+cols_group <- c('#984EA3','#4DAF4A')
+names(cols_group) <- c('RSTR','LTBI')
 
 DimPlot(TB_shrink.seurat, group.by = 'batch', label = F, reduction = "umap")
 dev.print(pdf, 'TB_RSTR_PP1_CD4_lognormscale_cleaned_umap_batch.pdf',width = 4.3, height = 4)
@@ -39,8 +85,6 @@ DimPlot(TB_shrink.seurat, group.by = 'Group', label = F, reduction = "umap",cols
 dev.print(pdf, 'TB_RSTR_PP1_CD4_lognormscale_cleaned_umap_Group.pdf',width = 5, height = 4)
 DimPlot(TB_shrink.seurat, group.by = 'Donor', label = F, reduction = "umap")
 dev.print(pdf, 'TB_RSTR_PP1_CD4_lognormscale_cleaned_umap_Donor.pdf',width = 4.3, height = 4)
-DimPlot(TB_shrink.seurat, group.by = 'Group_DonorID', label = F, reduction = "umap")
-dev.print(pdf, 'TB_RSTR_PP1_CD4_lognormscale_cleaned_umap_Group_DonorID.pdf',width = 5.5, height = 4)
 DimPlot(TB_shrink.seurat, group.by = 'Sex', label = F, reduction = "umap")
 dev.print(pdf, 'TB_RSTR_PP1_CD4_lognormscale_cleaned_umap_Sex.pdf',width = 4.7, height = 4)
 
@@ -100,10 +144,6 @@ dev.print(pdf, 'TB_RSTR_PP1_CD4_lognorm_cleaned_DE_RSTR_vs_LTBI.pdf',width = 5.5
 # https://david.ncifcrf.gov/tools.jsp
 table1 <- 'TB_resistance_ESAT6_CD4_lognorm_RSTR_BP_DIRECT.xlsx'
 table1_DE_data <- read_excel(table1, sheet = "Sheet1")
-RSTR_signficant_genes <- RSTR_signficant_gene_table[!is.na(RSTR_signficant_gene_table$geneID),][,c('gene','geneID')]
-RSTR_signficant_genes$geneID <- as.numeric(RSTR_signficant_genes$geneID)
-rownames(RSTR_signficant_genes) <- RSTR_signficant_genes$geneID
-RSTR_signficant_genes <- RSTR_signficant_genes %>% arrange(desc(geneID))
 
 table1_DE_data$Term <- gsub('.*\\~','',table1_DE_data$Term)
 table1_DE_data <- table1_DE_data %>% dplyr::filter(FDR <= 0.05)
@@ -132,10 +172,6 @@ dev.print(pdf, paste('TB_RSTR_PP1_CD4_lognorm_cleaned_DE_RSTR_DAVID_GO_BF_DIRECT
 # LTBI GO
 table1 <- 'TB_RSTR_PP1_CD4_stringent_lognorm_RSTR_vs_LTBI_downregulated_sig_DAVID_BP_DIRECT.xlsx'
 table1_DE_data <- read_excel(table1, sheet = "Sheet1")
-RSTR_signficant_genes <- RSTR_signficant_gene_table[!is.na(RSTR_signficant_gene_table$geneID),][,c('gene','geneID')]
-RSTR_signficant_genes$geneID <- as.numeric(RSTR_signficant_genes$geneID)
-rownames(RSTR_signficant_genes) <- RSTR_signficant_genes$geneID
-RSTR_signficant_genes <- RSTR_signficant_genes %>% arrange(desc(geneID))
 
 table1_DE_data$Term <- gsub('.*\\~','',table1_DE_data$Term)
 table1_DE_data <- table1_DE_data %>% dplyr::filter(FDR <= 0.05)
@@ -163,6 +199,7 @@ dev.print(pdf, paste('TB_RSTR_PP1_CD4_lognorm_cleaned_DE_LTBI_DAVID_GO_BF_DIRECT
 
 #### GSEA ########################
 library(msigdbr)
+library(clusterProfiler)
 # msigdbr_species()
 # H: hallmark gene sets
 # C1: positional gene sets
@@ -305,7 +342,7 @@ RNAseq_dataframe_log1p_scale$Donor <- TB_shrink.seurat$Donor
 RNAseq_dataframe_log1p_scale$Group <- TB_shrink.seurat$Group
 RNAseq_dataframe_log1p_scale$Group_DonorID <- TB_shrink.seurat$Group_DonorID
 
-cytokine_global_table <- read_excel('../Global landscape of cytokines Supplementary Table S1.xlsx', sheet = "Cytokines")
+cytokine_global_table <- read_excel('Global landscape of cytokines Supplementary Table S1.xlsx', sheet = "Cytokines")
 cytokine_global_list <- unique(cytokine_global_table$`HGNC symbol`)
 cytokine_global_list <- c(cytokine_global_list,'GZMB','PRF1','MIF')
 seurat_cytokine_list <- cytokine_global_list[cytokine_global_list %in% seurat_gene_list]
@@ -443,14 +480,9 @@ stringent_p_cutoff <- .05#1e-7#
 CD4_RSTR_LTBI.markers_immune_sig <- CD4_RSTR_LTBI.markers_immune %>% dplyr::filter(p_val_adj <= stringent_p_cutoff)
 
 CD4_RSTR_LTBI.markers_immune_sig <- CD4_RSTR_LTBI.markers_immune_sig %>% dplyr::filter(avg_log2FC >= logFC_cutoff)  %>% dplyr::select(gene,geneID,avg_log2FC,p_val_adj)# %>% arrange(p_val_adj) #
-# CD4_gene_lognormfraction_gene_list <- CD4_gene_lognormfraction$gene[(CD4_gene_lognormfraction$pos_diff > 0) & (CD4_gene_lognormfraction$ttest_p <= 0.05)]
-# CD4_gene_lognormmean_gene_list <- CD4_gene_lognormmean$gene[(CD4_gene_lognormmean$mean_diff > 0) & (CD4_gene_lognormmean$ttest_p <= 0.05)]
-# CD4_RSTR_LTBI.markers_immune_sig <- CD4_RSTR_LTBI.markers_immune_sig[CD4_RSTR_LTBI.markers_immune_sig$gene %in% intersect(CD4_gene_lognormmean_gene_list,CD4_gene_lognormfraction_gene_list),]
 CD4_RSTR_LTBI.markers_immune_sig <- data.frame(CD4_RSTR_LTBI.markers_immune_sig)
 
 stringdb_significant_RSTR_mapped <- string_db$map(CD4_RSTR_LTBI.markers_immune_sig, "gene", removeUnmappedRows = TRUE)
-# stringdb_significant_RSTR_mapped <- stringdb_significant_RSTR_mapped[stringdb_significant_RSTR_mapped$STRING_id != '9606.ENSP00000383715',]
-# stringdb_significant_RSTR_mapped <- stringdb_significant_RSTR_mapped[stringdb_significant_RSTR_mapped$STRING_id != '9606.ENSP00000349967',]
 
 hits <- stringdb_significant_RSTR_mapped$STRING_id#[1:200]
 string_db$plot_network(hits)
@@ -458,12 +490,7 @@ string_db$plot_network(hits)
 # (i.e. green down-regulated gened and red for up-regulated genes)
 selected_gene_set1_org_mapped_pval05 <- string_db$add_diff_exp_color(stringdb_significant_RSTR_mapped,logFcColStr="avg_log2FC" )
 # post payload information to the STRING server
-payload_id <- string_db$post_payload( selected_gene_set1_org_mapped_pval05$STRING_id,colors=selected_gene_set1_org_mapped_pval05$color )
-# display a STRING network pdf with the "halo"
-string_db$plot_network(hits, payload_id=payload_id )
-dev.print(pdf, paste('TB_RSTR_PP1_CD4_lognorm_cleaned_PP1_DE_RSTR_vs_LTBI_upregulated_stringdb.pdf',sep = ''),width = 10, height = 9)
 
-# string_db$plot_network(stringdb_significant_RSTR_mapped$STRING_id)
 clustersList_significant_RSTR <- string_db$get_clusters(stringdb_significant_RSTR_mapped$STRING_id)
 for (cluster_name in c(1:3)){
   graphics.off()
@@ -508,12 +535,12 @@ for (cluster_name in c(1:3)){
 vignette("SCENIC_Running")
 exprMat <- as.matrix(TB_shrink.seurat@assays[["RNA"]]@data)
 library(SCENIC)
-
+# need to download the database from SCENIC webiste
 dbs <- defaultDbNames[["hgnc"]]
 dbs['500bp'] <- 'hg19-500bp-upstream-10species.mc9nr.feather'
 dbs['10kb'] <- 'hg19-tss-centered-10kb-10species.mc9nr.feather'
 scenicOptions <- initializeScenic(org="hgnc", 
-                                  dbDir="TB_RSTR_PP1_only_CD4_stringent_cutoff_lognorm_Seurat/SCENIC/database", 
+                                  dbDir="SCENIC/database", 
                                   dbs = dbs,
                                   nCores=8) #library(parallel) #detectCores()
 genesKept <- geneFiltering(exprMat, scenicOptions)
@@ -557,55 +584,4 @@ loom <- add_cell_annotation(loom, cellInfo)
 close_loom(loom)
 
 #move to the terminal, open the virtual environment
-
-#### cell cycle ###########
-s.genes <- cc.genes$s.genes
-s.genes <- s.genes[s.genes %in% seurat_gene_list]
-g2m.genes <- cc.genes$g2m.genes
-g2m.genes <- g2m.genes[g2m.genes %in% seurat_gene_list]
-TB_shrink.seurat <- CellCycleScoring(TB_shrink.seurat, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
-TB_shrink.seurat$Phase
-DimPlot(TB_shrink.seurat, group.by = "Phase") 
-dev.print(pdf, paste('TB_RSTR_PP1_CD4_lognorm_Cycle_Phase.pdf',sep = ''),width = 4.3, height = 4.5)
-
-temp1 <- dplyr::count(TB_shrink.seurat@meta.data,Group,Phase)#,DonorID)
-temp1 <- temp1 %>% group_by(Group) %>% dplyr::mutate(total = sum(n))
-temp1$percentage <- temp1$n/temp1$total*100
-# Filling zero values for the condition that has no counts!!
-for (donor_name in unique(temp1$Group)){
-  temp_Tcount <- temp1[(temp1$Group == donor_name),][1,]
-  for (temp2 in c('S','G1','G2M')){
-    if_row <- (temp1$Group == donor_name)
-    if (sum(if_row) == 0){
-      temp_Tcount$Phase <- temp_Tcount
-      temp_Tcount$n <- 0
-      temp_Tcount$percentage <- 0
-      temp1 <- rbind(temp1,temp_Tcount)
-    }
-  }  
-}
-
-cols_TCR_specificity <- c("black","bisque4","grey")
-names(cols_TCR_specificity) <- c('G2M','S','G1')
-temp1$Group <- factor(temp1$Group, levels = c('RSTR','LTBI'))
-ggplot(temp1,aes(x=Group, y=percentage,fill = Phase)) +  ggtitle('Cell Cycle') +
-  geom_bar(position="stack", stat="identity") +
-  theme(text = element_text(size = 15),plot.title = element_text(size = 15, face = "bold")) + RotatedAxis() +
-  ylab('activated CD4 cells (%)') + xlab('Group') +
-  scale_fill_manual(values = cols_TCR_specificity)
-dev.print(pdf, paste('TB_RSTR_PP1_CD4_Cycle_Phase_fraction_Group.pdf',sep = ''),width = 3.5, height = 3.5)
-
-temp1 <- dplyr::count(TB_shrink.seurat@meta.data,Group,Phase,DonorID)
-temp1 <- temp1 %>% group_by(Group,DonorID) %>% dplyr::mutate(total = sum(n))
-temp1$percentage <- temp1$n/temp1$total*100
-
-phase_name <- 'G2M'
-wilcox_result <- wilcox.test(temp1$percentage[(temp1$Phase == phase_name) & (temp1$Group == 'RSTR')], temp1$percentage[(temp1$Phase == phase_name) & (temp1$Group == 'LTBI')])
-temp1$Group <- factor(temp1$Group, levels = c('RSTR','LTBI'))
-ggplot(temp1[temp1$Phase == phase_name,],aes(x=Group, y=percentage)) +
-  geom_point(shape = 2) +
-  theme(text = element_text(size = 15),plot.title = element_text(size = 15, face = "bold")) + RotatedAxis() +
-  ylab('activated CD4 cells (%)') + xlab('Group') + 
-  ggtitle(paste('Cell Cycle',phase_name,'phase\nwilcoxon p:',format(wilcox_result$p.value,digits = 3)))
-dev.print(pdf, paste('TB_RSTR_PP1_CD4_Cycle_Phase_fraction_Group_',phase_name,'.pdf',sep = ''),width = 3, height = 3.5)
 
