@@ -11,8 +11,6 @@ library(xlsx)
 library(Seurat)
 library(ggridges)
 
-#https://www.bioconductor.org/packages/release/bioc/html/CATALYST.html
-
 ESAT6Table_cleaned <- read.csv('TB_RSTR_PP1_index_sort_PCR_TCR_table.csv',check.names = F)
 flow_channels_full <- colnames(ESAT6Table_cleaned)[grepl('idx',colnames(ESAT6Table_cleaned))]
 ESAT6Table_cleaned <- ESAT6Table_cleaned[!is.na(ESAT6Table_cleaned[,flow_channels_full[1]]),]
@@ -24,10 +22,8 @@ ESAT6Table_cleaned$donorGrp_AgeBase_Sex_donorID <- paste(ESAT6Table_cleaned$dono
 library(tidyverse)
 library(pheatmap)
 library(plyr)
-# detach(package:plyr)
 library(tidyverse)
 library(dplyr)
-# install.packages("immunarch")
 
 CDR3a_unique_table_CrossDonor <- data.frame(table(ESAT6Table_cleaned$CDR3a)) %>% arrange(desc(Freq))
 CDR3a_unique_table_CrossDonor$clone_group <- 1:dim(CDR3a_unique_table_CrossDonor)[1]
@@ -225,7 +221,7 @@ for (donorID in unique(ESAT6Table_cleaned$donorGrp_AgeBase_Sex_donorID)){
 # csv2fcs does not take negative values and will overspill!!!
 # sce_CyTOF <- readRDS('tonsil_organoid_PMA_sce.rds')
 # fcs_CyTOF <- readRDS('tonsil_organoid_PMA_fcs.rds')
-fcs_list_flow_PCR_raw_nonzero <- dir('./fcs_converter/flow_PCR_raw_nonzero_042822', full.names=T, pattern="*.fcs$")
+fcs_list_flow_PCR_raw_nonzero <- dir('flow_PCR_raw_nonzero_042822', full.names=T, pattern="*.fcs$")
 fcs_flow_PCR_raw_nonzero <- read.flowSet(fcs_list_flow_PCR_raw_nonzero, transformation = FALSE, truncate_max_range = FALSE)
 # summary(fcs_flow_PCR_raw_nonzero)
 panel_fcs <- pData(parameters(fcs_flow_PCR_raw_nonzero[[1]]))
@@ -293,111 +289,40 @@ flow_plus_transformed_PCR_binary_table_sce_scale <- t(scale(t(flow_plus_transfor
 flow_plus_transformed_PCR_binary_scale <- sce_flow_PCR_raw
 flow_plus_transformed_PCR_binary_scale@assays@data@listData[["exprs"]] <- flow_plus_transformed_PCR_binary_table_sce_scale
 
-########## histogram ##########################
-
-p <- plotExprs(sce_flow_PCR_raw, color_by = "Group")
-p$facet$params$ncol <- 6
-p
-dev.print(pdf, paste('TB_RSTR_PP1_flow_PCR_histogram_Group.pdf',sep = ''),width = 16, height = 14)
-
-p <- plotExprs(flow_plus_transformed_PCR_binary_scale, color_by = "Group")
-p$facet$params$ncol <- 6
-p
-dev.print(pdf, paste('TB_RSTR_PP1_flow_plus_transformed_PCR_binary_scale_histogram_Group.pdf',sep = ''),width = 16, height = 14)
-
-plotScatter(flow_plus_transformed_PCR_binary_scale, c('CCR6','CXCR3'))
-dev.print(pdf, paste('TB_RSTR_PP1_plus_transformed_PCR_binary_scale_CXCR3_CCR6.pdf',sep = ''),width = 3, height = 3)
-
-plotScatter(flow_plus_transformed_PCR_binary_scale, c('CD25','CD4'))
-dev.print(pdf, paste('TB_RSTR_PP1_plus_transformed_PCR_binary_scale_CD4_CD25.pdf',sep = ''),width = 3, height = 3)
-
-p <- plotExprs(flow_plus_transformed_PCR_binary_scale,color_by = 'clonal_expanded')
-p$facet$params$ncol <- 6
-p
-dev.print(pdf, paste('TB_RSTR_PP1_flow_plus_transformed_PCR_binary_scale_histogram.pdf',sep = ''),width = 16, height = 14)
-
-dataframe_PCR_log <- data.frame(t(flow_PCR_raw_table_sce[PCR_panel_name_short,]))
-dataframe_PCR_log <- log1p(dataframe_PCR_log)
-dataframe_PCR_log$Group <- sce_flow_PCR_raw@colData@listData[["Group"]]
-dataframe_PCR_log$Group_DonorID <- sce_flow_PCR_raw@colData@listData[["sample_id"]]
-
-for (marker in PCR_panel_name_short){
-  graphics.off()
-  plot <- ggplot(dataframe_PCR_log, aes(x = !!sym(marker), y = Group_DonorID,fill = Group)) +  stat_density_ridges(quantile_lines = TRUE) +
-    theme(text = element_text(size = 20))
-    
-  print(plot)
-  dev.print(pdf, paste('TB_RSTR_PP1_flow_PCR_histogram_log1p_',marker,'.pdf',sep = ''),width = 6.5, height = 4.5)
-}
-
-
 ########### clustering and UMAP ####################
 # cluster tSNE and UMAP
 flow_plus_transformed_PCR_binary_scale <- runDR(flow_plus_transformed_PCR_binary_scale, "TSNE", cells = 280, features = "type")
-flow_plus_transformed_PCR_binary_scale <- runDR(flow_plus_transformed_PCR_binary_scale, "UMAP", cells = 280, features = "type")
 
-plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'batch') #
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_tSNE_batch.pdf',sep = ''),width = 4.7, height = 3)
-plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'batch',facet_by = 'batch', ncol = 2) #
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_tSNE_batch_split.pdf',sep = ''),width = 4.7, height = 3)
-
-plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'Group',facet_by = 'Group', ncol = 1) + theme(legend.position = "none") #
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_tSNE_Group_vertical.pdf',sep = ''),width = 3, height = 5)
-
-plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'clonal_expanded',facet_by = 'Group', ncol = 2) + scale_colour_manual(values = c("yes" = "red", "no" = "darkgrey"))
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_tSNE_if_cloned.pdf',sep = ''),width = 4.7, height = 3)
-
+# To make the tSNE consistent, we read in the pre-saved rds
+flow_plus_transformed_PCR_binary_scale <- readRDS('TB_RSTR_PP1_flow_PCR_SingleCellExperiment_object.rds')
 library(gridExtra)
+new_marker_list <- c("CD4","CD8","CD69","CD154","CD137",
+                     "CD25","CD127","CD38","HLA-DR","CD45RA",
+                     "CXCR3","CCR6","FOXP3","TGFB","RUNX1",
+                     "TBET","IFNG","IL2","TNF","RUNX3",
+                     "RORC","IL17A","GZMB","PERF","IL21",
+                     "GATA3","IL13","IL4")
 plots <- lapply(new_marker_list, function(.x) plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = .x) + 
          theme(text = element_text(size = 20)))
 
-new_marker_list <- c("CD4","CD8","CD69","CD154","CD137",
-                 "CD25","CD127","CD38","HLA-DR","CD45RA",
-                 "CXCR3","CCR6","FOXP3","TGFB","RUNX1",
-                 "TBET","IFNG","IL2","TNF","RUNX3",
-                 "RORC","IL17A","GZMB","PERF","IL21",
-                 "GATA3","IL13","IL4")
 do.call(grid.arrange,plots)
 dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_tSNE_allmarkers.pdf',sep = ''),width = 25, height = 25)
-
-
-for (marker in marker_list){
-  graphics.off()
-  print(marker)
-  plot <- plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = marker) + 
-    #theme(legend.position = "none") +
-    theme(text = element_text(size = 20))
-  print(plot)
-  dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_tSNE_',marker,'.pdf',sep = ''),width = 5.5, height = 5.5)
-  
-}
-
-plot(flow_plus_transformed_PCR_binary_scale@metadata[["delta_area"]])
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_cluster',n_clusters,'_delta_area.pdf',sep = ''),width = 8, height = 7)
 
 # FlowSom clustering
 n_clusters <- 40
 grid_size <- 15
 flow_plus_transformed_PCR_binary_scale <- cluster(flow_plus_transformed_PCR_binary_scale, xdim = grid_size, ydim = grid_size, features = "type", maxK = n_clusters,seed = 1)
-# cluster heatmap 
+
 plotExprHeatmap(flow_plus_transformed_PCR_binary_scale, features = "type", by = "cluster_id", k = paste("meta",n_clusters,sep = ''), bars = TRUE, perc = TRUE)
 dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_heatmap.pdf',sep = ''),width = 8, height = 5)
 
 plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = paste("meta",n_clusters,sep = '')) 
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_UMAP.pdf',sep = ''),width = 5, height = 4)
-
-plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = paste("meta",n_clusters,sep = ''),facet_by = 'Group', ncol = 1)
-ggsave(filename = "TB_RSTR_PP1_flow_PCR_binary_TSNE_Group.svg",width = 5, height = 6)
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_UMAP_Group_vertical.pdf',sep = ''),width = 5, height = 6)
-
-plotDR(flow_plus_transformed_PCR_binary_scale, "UMAP", color_by = paste("meta",n_clusters,sep = ''),facet_by = 'Group', ncol = 2)
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_UMAP_Group.pdf',sep = ''),width = 8, height = 3)
-
-plotClusterExprs(flow_plus_transformed_PCR_binary_scale, k = paste("meta",n_clusters,sep = ''), features = "type")
-dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_histogram.pdf',sep = ''),width = 16, height = 14)
-
+dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_tSNE.pdf',sep = ''),width = 5, height = 4)
 
 ##### cluster annotation #####################################
+# To make the tSNE consistent, we read in the pre-saved rds
+flow_plus_transformed_PCR_binary_scale <- readRDS('TB_RSTR_PP1_flow_PCR_SingleCellExperiment_object.rds')
+
 merging_table2 <- data.frame(original_cluster = c(1:n_clusters), new_cluster = '')
 merging_table2$new_cluster[merging_table2$original_cluster %in% c(36,37,39)] <- '1' 
 merging_table2$new_cluster[merging_table2$original_cluster %in% c(28,30)] <- '2' 
@@ -427,44 +352,35 @@ plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'T_cell_subset
   guides(fill=guide_legend(title="T cell\nsubsets"))
 dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_annotated_subsets_TSNE_Group_vertical.pdf',sep = ''),width = 7, height = 4.5)
 
-# merging_table <- data.frame(original_cluster = c(1:n_clusters), new_cluster = '')
-# merging_table$new_cluster[merging_table$original_cluster %in% c(36,37,39)] <- 'Treg' # the difference is CD25 and CD137
-# merging_table$new_cluster[merging_table$original_cluster %in% c(30,28)] <- 'RORC+IL13+IL4+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(16,20,23)] <- 'RORC+IL13+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(35,38)] <- 'RORC+GATA3+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(40)] <- 'RORC+GATA3+IL17A+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(31)] <- 'RORC+IL17A+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(34)] <- 'RORC+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(32,11)] <- 'RORC+TNF+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(9)] <- 'RORC+IFNG+IL2+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(6)] <- 'RORC+TBET+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(3,7,8,12,16)] <- 'RORC+IFNG+cytolytic CD4' #Here 7 is different
-# merging_table$new_cluster[merging_table$original_cluster %in% c(5)] <- 'TBET+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(4)] <- 'CXCR3+TNF+CD4' #IFNG+
-# merging_table$new_cluster[merging_table$original_cluster %in% c(22)] <- 'IL21+CD4'
-# merging_table$new_cluster[merging_table$original_cluster %in% c(14,15,26)] <- 'TNF+CD4' # 
-# merging_table$new_cluster[merging_table$original_cluster %in% c(33)] <- 'CD137+CD4' # partially CXCR3+
-# merging_table$new_cluster[merging_table$original_cluster %in% c(25,17)] <- 'CD45RA-CD4' # partially CXCR3+
-# merging_table$new_cluster[merging_table$original_cluster %in% c(10,13)] <- 'CD45RA+CD4'
-# merging_table$new_cluster[merging_table$original_cluster %in% c(1,2)] <- 'CD8' # the resolution is so low for CD8 subset to be seperable!
-# 
-# merging_table$new_cluster <- factor(merging_table$new_cluster, 
-#                                      levels = c("Treg",'RORC+IL13+IL4+CD4',"RORC+IL13+CD4","RORC+GATA3+CD4",'RORC+GATA3+IL17A+CD4',"RORC+IL17A+CD4","RORC+CD4",'RORC+TNF+CD4',"RORC+IFNG+IL2+CD4","RORC+TBET+CD4","RORC+IFNG+cytolytic CD4",
-#                                                 'TBET+CD4',"CXCR3+TNF+CD4", "IL21+CD4", 'TNF+CD4','CD137+CD4',"CD45RA-CD4","CD45RA+CD4", "CD8"))
-# 
-# flow_plus_transformed_PCR_binary_scale <- mergeClusters(flow_plus_transformed_PCR_binary_scale, k = paste("meta",n_clusters,sep = ''), table = merging_table, id = "merging1",overwrite = T)
-# 
-# plotExprHeatmap(flow_plus_transformed_PCR_binary_scale, features = "type", row_clust = F, by = "cluster_id", k = "merging1",bars = T, perc = F)
-# dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_heatmap_annotated_names.pdf',sep = ''),width = 8, height = 5)
-# 
-# plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'merging1')
-# dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_TSNE_annotated_names.pdf',sep = ''),width = 6, height = 3)
-# 
-# plotDR(flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'merging1',facet_by = 'Group', ncol = 1) + xlab('TSNE 1') + ylab('TSNE 2')
-# dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_annotated_names_Group.pdf',sep = ''),width = 10, height = 4)
-# 
-# plotAbundances(flow_plus_transformed_PCR_binary_scale, k = "merging1", by = "cluster_id", shape_by = "Group")
-# dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_annotated_names_Group.pdf',sep = ''),width = 8, height = 8)
+plotExprHeatmap(flow_plus_transformed_PCR_binary_scale, features = "type", row_clust = F, by = "cluster_id", k = "T_cell_subsets",bars = T, perc = F)
+dev.print(pdf, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_heatmap_annotated_subsets.pdf',sep = ''),width = 8, height = 5)
+
+merging_table <- data.frame(original_cluster = c(1:n_clusters), new_cluster = '')
+merging_table$new_cluster[merging_table$original_cluster %in% c(36,37,39)] <- 'Treg' # the difference is CD25 and CD137
+merging_table$new_cluster[merging_table$original_cluster %in% c(30,28)] <- 'RORC+IL13+IL4+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(16,20,23)] <- 'RORC+IL13+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(35,38)] <- 'RORC+GATA3+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(40)] <- 'RORC+GATA3+IL17A+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(31)] <- 'RORC+IL17A+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(34)] <- 'RORC+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(32,11)] <- 'RORC+TNF+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(9)] <- 'RORC+IFNG+IL2+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(6)] <- 'RORC+TBET+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(3,7,8,12,16)] <- 'RORC+IFNG+cytolytic CD4' #Here 7 is different
+merging_table$new_cluster[merging_table$original_cluster %in% c(5)] <- 'TBET+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(4)] <- 'CXCR3+TNF+CD4' #IFNG+
+merging_table$new_cluster[merging_table$original_cluster %in% c(22)] <- 'IL21+CD4'
+merging_table$new_cluster[merging_table$original_cluster %in% c(14,15,26)] <- 'TNF+CD4' #
+merging_table$new_cluster[merging_table$original_cluster %in% c(33)] <- 'CD137+CD4' # partially CXCR3+
+merging_table$new_cluster[merging_table$original_cluster %in% c(25,17)] <- 'CD45RA-CD4' # partially CXCR3+
+merging_table$new_cluster[merging_table$original_cluster %in% c(10,13)] <- 'CD45RA+CD4'
+merging_table$new_cluster[merging_table$original_cluster %in% c(1,2)] <- 'CD8' # the resolution is so low for CD8 subset to be seperable!
+
+merging_table$new_cluster <- factor(merging_table$new_cluster,
+                                     levels = c("Treg",'RORC+IL13+IL4+CD4',"RORC+IL13+CD4","RORC+GATA3+CD4",'RORC+GATA3+IL17A+CD4',"RORC+IL17A+CD4","RORC+CD4",'RORC+TNF+CD4',"RORC+IFNG+IL2+CD4","RORC+TBET+CD4","RORC+IFNG+cytolytic CD4",
+                                                'TBET+CD4',"CXCR3+TNF+CD4", "IL21+CD4", 'TNF+CD4','CD137+CD4',"CD45RA-CD4","CD45RA+CD4", "CD8"))
+
+flow_plus_transformed_PCR_binary_scale <- mergeClusters(flow_plus_transformed_PCR_binary_scale, k = paste("meta",n_clusters,sep = ''), table = merging_table, id = "merging1",overwrite = T)
 
 ##### filtering only CD4 and subset visualization ####################
 CD4_flow_plus_transformed_PCR_binary_scale <- filterSCE(flow_plus_transformed_PCR_binary_scale, k = "merging1",cluster_id != 'CD8')
@@ -474,7 +390,7 @@ cluster_dataframe <- data.frame(cluster = cluster_ids(CD4_flow_plus_transformed_
                                 sample_id = CD4_flow_plus_transformed_PCR_binary_scale@colData@listData[["sample_id"]])
 cluster_dataframe <- mutate_all(cluster_dataframe, function(x) as.character(x))
 cluster_group_sample_count <- dplyr::count(cluster_dataframe, cluster, Group,sample_id)
-cluster_group_sample_count <- cluster_group_sample_count %>% group_by(sample_id) %>% mutate(total = sum(n))
+cluster_group_sample_count <- cluster_group_sample_count %>% dplyr::group_by(sample_id) %>% dplyr::mutate(total = sum(n))
 cluster_group_sample_count$percentage <- cluster_group_sample_count$n/cluster_group_sample_count$total*100
 # Filling zero values for the Group that has no counts!!
 for (sample_name in unique(cluster_dataframe$sample_id)){
@@ -490,27 +406,10 @@ for (sample_name in unique(cluster_dataframe$sample_id)){
     }
 }
 
-library(dplyr)
-library(tidyr)
-
-cluster_ttest_table <- cluster_group_sample_count[,c("cluster","sample_id","percentage")] 
-cluster_ttest_table <- cluster_ttest_table %>% arrange(match(sample_id, sort(unique(cluster_ttest_table$sample_id)))) %>% pivot_wider(names_from = c('sample_id'), values_from = c(percentage))
-cluster_ttest_table$p_val <- 0
-
-for (cluster_name in unique(cluster_group_sample_count$cluster)){
-  print(cluster_name)
-  ttest_result_pct <- wilcox.test(cluster_group_sample_count$percentage[(cluster_group_sample_count$cluster == cluster_name) & (cluster_group_sample_count$Group == 'RSTR')],
-                                  cluster_group_sample_count$percentage[(cluster_group_sample_count$cluster == cluster_name) & (cluster_group_sample_count$Group == 'LTBI')])
-  cluster_ttest_table$p_val[cluster_ttest_table$cluster == cluster_name] <- ttest_result_pct$p.value
-}
-cluster_ttest_table <- cluster_ttest_table %>% arrange(p_val)
-cluster_ttest_table$p_adj <- p.adjust(cluster_ttest_table$p_val)
-write.xlsx(cluster_ttest_table, paste('TB_RSTR_PP1_only_flow_plus_transformed_PCR_binary_scale_GATA3_gate_Group_wilcoxon_test.xlsx',sep = ''))
-
 cols_group <- c('#984EA3','#4DAF4A')
 names(cols_group) <- c('RSTR','LTBI')
 
-cluster_group_sample_count <- cluster_group_sample_count %>% group_by(cluster,Group) %>% mutate(median = median(percentage))
+cluster_group_sample_count <- cluster_group_sample_count %>% dplyr::group_by(cluster,Group) %>% dplyr::mutate(median = median(percentage))
 temp <- unique(cluster_group_sample_count[,c('cluster','Group','median')])
 temp <- temp %>% pivot_wider(names_from = Group, values_from = median)
 temp$diff <- temp$RSTR - temp$LTBI
@@ -518,8 +417,8 @@ temp$cluster <- as.character(temp$cluster)
 temp <- temp %>% arrange(desc(diff))
 cluster_group_sample_count$cluster <- factor(cluster_group_sample_count$cluster,levels = temp$cluster)
 ggplot(cluster_group_sample_count,aes(x=cluster, y=percentage))  +
-  geom_boxplot(position=position_dodge(1),aes(fill = Group)) + 
-  theme(text = element_text(size = 15),plot.title = element_text(size = 20, face = "bold")) + 
+  geom_boxplot(position=position_dodge(1),aes(fill = Group)) +
+  theme(text = element_text(size = 15),plot.title = element_text(size = 20, face = "bold")) +
   ylab('activated CD4 %') +
   geom_jitter(position=position_dodge(1),size = 1,aes(fill = Group),shape = 2) +
   ggtitle('antigen-specific CD4 T cell subsets') +
@@ -528,55 +427,47 @@ ggplot(cluster_group_sample_count,aes(x=cluster, y=percentage))  +
 dev.print(pdf, paste('TB_RSTR_PP1_only_CD4_flow_plus_transformed_PCR_binary_scale_Group_CD4_subsets.pdf',sep = ''),width = 10, height = 2.5)
 
 ###### gating ###############################
-trace("plotAbundances", edit=TRUE)
-# take the last p of shape out of the aes_string. shape = 2
+# trace("plotAbundances", edit=TRUE)
+# # take the last p of shape out of the aes_string. shape = 2
 
 es <- assay(CD4_flow_plus_transformed_PCR_binary_scale, "exprs")
 es <- es[type_markers(CD4_flow_plus_transformed_PCR_binary_scale), ]
 
-cs <- split(seq_len(ncol(CD4_flow_plus_transformed_PCR_binary_scale)), cut(es["FOXP3", ], nk <- 2))
-cluster_name <- c('FOXP3-','FOXP3+')
-kids <- lapply(seq_len(nk), function(i) {
+cs_FOXP3 <- split(seq_len(ncol(CD4_flow_plus_transformed_PCR_binary_scale)), cut(es["FOXP3", ], nk <- 2))
+cs_CD25 <- split(seq_len(ncol(CD4_flow_plus_transformed_PCR_binary_scale)), cut(es["CD25", ], nk <- 2))
+cs <- list()
+cs[['FOXP3+CD25+CD4']] <- intersect(cs_FOXP3$`(1.34,3.02]`,cs_CD25$`(0.61,4.39]`)
+cs[['FOXP3-CD25+CD4']] <- intersect(cs_FOXP3$`(-0.335,1.34]`,cs_CD25$`(0.61,4.39]`)
+cs[['FOXP3+CD25-CD4']] <- intersect(cs_FOXP3$`(1.34,3.02]`,cs_CD25$`(-3.17,0.61]`)
+cs[['FOXP3-CD25-CD4']] <- intersect(cs_FOXP3$`(-0.335,1.34]`,cs_CD25$`(-3.17,0.61]`)
+kids <- lapply(seq_len(4), function(i) {
   rep(i, length(cs[[i]]))
 })
 kids <- factor(unlist(kids))
 
 # store cluster IDs in cell metadata & codes in metadata
+CD4_flow_plus_transformed_PCR_binary_scale$cluster_id <- as.character(CD4_flow_plus_transformed_PCR_binary_scale$cluster_id)
 CD4_flow_plus_transformed_PCR_binary_scale$cluster_id[unlist(cs)] <- unlist(kids)
+CD4_flow_plus_transformed_PCR_binary_scale$cluster_id <- as.factor(CD4_flow_plus_transformed_PCR_binary_scale$cluster_id)
 metadata(CD4_flow_plus_transformed_PCR_binary_scale)$cluster_codes <- data.frame(
   custom = factor(levels(kids), levels = levels(kids)))
 
-# tabulate cluster assignments
-table(cluster_ids(CD4_flow_plus_transformed_PCR_binary_scale, "custom"))
-plotDR(CD4_flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'custom')
+merging_table <- data.frame(original_cluster = c(1:4), new_cluster = '')
+merging_table$new_cluster[merging_table$original_cluster %in% c(1)] <- 'FOXP3+CD25+CD4' # the difference is CD25 and CD137
+merging_table$new_cluster[merging_table$original_cluster %in% c(2)] <- 'FOXP3-CD25+CD4' # the difference is CD25 and CD137
+merging_table$new_cluster[merging_table$original_cluster %in% c(3)] <- 'FOXP3+CD25-CD4' # the difference is CD25 and CD137
+merging_table$new_cluster[merging_table$original_cluster %in% c(4)] <- 'FOXP3-CD25-CD4' # the difference is CD25 and CD137
 
-merging_table <- data.frame(original_cluster = c(1:2), new_cluster = '')
-merging_table$new_cluster[merging_table$original_cluster %in% c(1)] <- 'FOXP3-CD4' # the difference is CD25 and CD137
-merging_table$new_cluster[merging_table$original_cluster %in% c(2)] <- 'FOXP3+CD4' # the difference is CD25 and CD137
+CD4_flow_plus_transformed_PCR_binary_scale <- mergeClusters(CD4_flow_plus_transformed_PCR_binary_scale, k =  'custom', table = merging_table, id = "FOXP3_CD25_gate",overwrite = T)
 
-CD4_flow_plus_transformed_PCR_binary_scale <- mergeClusters(CD4_flow_plus_transformed_PCR_binary_scale, k =  'custom', table = merging_table, id = "FOXP3_gate",overwrite = T)
-
-plotDR(CD4_flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'FOXP3_gate')
-
-temp1 <- data.frame(rowData(out_DA$res)@listData)
-temp1$label <- 'n.s.'
-temp1$label[temp1$p_adj < 0.05] <- '*'
-temp1$label[temp1$p_adj < 0.01] <- '**'
-temp1$label[temp1$p_adj < 0.001] <- '***'
-temp1$label[is.na(temp1$p_adj)] <- 'n.s.'
-temp2 <- data.frame(label = temp1$label,
-                    cluster_id = temp1$cluster_id)
-
-plotAbundances(CD4_flow_plus_transformed_PCR_binary_scale, k = "FOXP3_gate", by = "cluster_id") + 
+plotAbundances(CD4_flow_plus_transformed_PCR_binary_scale, k = "FOXP3_CD25_gate", by = "cluster_id") + 
   scale_color_manual(values = cols_group) + 
   scale_fill_manual(values = cols_group) + 
   ylab('activated CD4 %') + 
   theme(text = element_text(size = 13),plot.title = element_text(size = 13, face = "bold")) +
-  ylim(0,20) +
-  # stat_compare_means(comparisons = my_comparisons, label = "p.signif") + # Add significance levels
-  geom_text(data = temp2, aes(x = 1.5,y = 17, label = label),size = 4) +
+  ylim(0,10) + 
   facet_wrap('cluster_id',ncol = 2)
-dev.print(pdf, paste('TB_RSTR_PP1_only_CD4_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_FOXP3_gate_Group.pdf',sep = ''),width = 5.2, height = 3)
+dev.print(pdf, paste('TB_RSTR_PP1_only_CD4_flow_plus_transformed_PCR_binary_scale_CD25_FOXP3_gate_Group.pdf',sep = ''),width = 5.2, height = 5)
 
 # RORC and TBET
 cs_RORC <- split(seq_len(ncol(CD4_flow_plus_transformed_PCR_binary_scale)), cut(es["RORC", ], nk <- 2))
@@ -598,8 +489,6 @@ CD4_flow_plus_transformed_PCR_binary_scale$cluster_id <- as.factor(CD4_flow_plus
 metadata(CD4_flow_plus_transformed_PCR_binary_scale)$cluster_codes <- data.frame(
   custom = factor(levels(kids), levels = levels(kids)))
 
-plotDR(CD4_flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'custom')
-
 merging_table <- data.frame(original_cluster = c(1:4), new_cluster = '')
 merging_table$new_cluster[merging_table$original_cluster %in% c(1)] <- 'RORC+TBET+CD4' # the difference is CD25 and CD137
 merging_table$new_cluster[merging_table$original_cluster %in% c(2)] <- 'RORC-TBET+CD4' # the difference is CD25 and CD137
@@ -608,17 +497,6 @@ merging_table$new_cluster[merging_table$original_cluster %in% c(4)] <- 'RORC-TBE
 
 CD4_flow_plus_transformed_PCR_binary_scale <- mergeClusters(CD4_flow_plus_transformed_PCR_binary_scale, k =  'custom', table = merging_table, id = "RORC_TBET_gate",overwrite = T)
 
-plotDR(CD4_flow_plus_transformed_PCR_binary_scale, "TSNE", color_by = 'RORC_TBET_gate')
-
-temp1 <- data.frame(rowData(out_DA$res)@listData)
-temp1$label <- 'n.s.'
-temp1$label[temp1$p_adj < 0.05] <- '*'
-temp1$label[temp1$p_adj < 0.01] <- '**'
-temp1$label[temp1$p_adj < 0.001] <- '***'
-temp1$label[is.na(temp1$p_adj)] <- 'n.s.'
-temp2 <- data.frame(label = temp1$label,
-                    cluster_id = temp1$cluster_id)
-
 plotAbundances(CD4_flow_plus_transformed_PCR_binary_scale, k = "RORC_TBET_gate", by = "cluster_id") + 
   scale_color_manual(values = cols_group) + 
   scale_fill_manual(values = cols_group) + 
@@ -626,12 +504,12 @@ plotAbundances(CD4_flow_plus_transformed_PCR_binary_scale, k = "RORC_TBET_gate",
   theme(text = element_text(size = 13),plot.title = element_text(size = 13, face = "bold")) +
   ylim(0,75) + 
   facet_wrap('cluster_id',ncol = 2)
-dev.print(pdf, paste('TB_RSTR_PP1_only_CD4_flow_plus_transformed_PCR_binary_scale_size',grid_size,'_cluster',n_clusters,'_TBET_RORC_gate_Group.pdf',sep = ''),width = 5.2, height = 5)
+dev.print(pdf, paste('TB_RSTR_PP1_only_CD4_flow_plus_transformed_PCR_binary_scale_TBET_RORC_gate_Group.pdf',sep = ''),width = 5.2, height = 5)
 
 ##### clonal expansion per Group visualization ################################
 cluster_clonal_expanded_dataframe <- data.frame(cluster = cluster_ids(flow_plus_transformed_PCR_binary_scale,'T_cell_subsets'),clonally_expanded = sce_flow_PCR_raw@colData@listData[["clonal_expanded"]],Group = flow_plus_transformed_PCR_binary_scale@colData@listData[["Group"]])
 cluster_clonal_expanded_group_sample_count <- dplyr::count(cluster_clonal_expanded_dataframe, cluster, clonally_expanded,Group)
-cluster_clonal_expanded_group_sample_count <- cluster_clonal_expanded_group_sample_count %>% group_by(Group,cluster) %>% mutate(total = sum(n))
+cluster_clonal_expanded_group_sample_count <- cluster_clonal_expanded_group_sample_count %>% dplyr::group_by(Group,cluster) %>% dplyr::mutate(total = sum(n))
 cluster_clonal_expanded_group_sample_count$percentage <- cluster_clonal_expanded_group_sample_count$n/cluster_clonal_expanded_group_sample_count$total*100
 # Filling zero values for the Group that has no counts!!
 for (cluster_name in unique(cluster_clonal_expanded_dataframe$cluster)){
